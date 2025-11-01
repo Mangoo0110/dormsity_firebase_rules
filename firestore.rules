@@ -1,0 +1,262 @@
+rules_version = '2';
+
+service cloud.firestore {
+
+  match /databases/{database}/documents {
+
+    // User-private
+    match /usersPrivate/{userId}{
+    	function isTheOwner(){
+      	return hasAuth() && request.auth.uid == userId;
+      }
+    	allow read, write: if isTheOwner() || isSuperAdmin(request.auth.uid);
+    }
+    
+    // User-public
+    match /usersPublic/{userId} {
+    	function isTheOwner(){
+      	return hasAuth() && request.auth.uid == userId;
+      }
+      
+    	allow read: if hasAuth();
+      allow write: if isTheOwner();
+    }
+
+    // User's followingChannels collection
+    match /usersPublic/{userId}/followingChannels/{listId} {
+      
+    	allow read, write: if hasAuth();
+    }
+
+    // User's adminOfChannels collection
+    match /usersPublic/{userId}/adminOfChannels/{listId} {
+    
+    	allow read, write: if hasAuth();
+    }
+
+		// Pages-private
+    match /pagesPrivate/{pageId} {
+
+    	allow read, write: if hasAuth() && (isSuperAdmin(request.auth.uid));
+
+    }
+    
+    // Pages-public
+    match /pagesPublic/{pageId} {
+
+    	function pageAdminRequested(){
+      	return request.auth.uid in 
+        	get(/databases/$(database)/documents/pagesPrivate/$(pageId)).data.adminIds;
+      }
+
+      function isPageApproved() {
+        return resource.data.approved == true
+      }
+
+    	allow read: if hasAuth() && ( isPageApproved() || pageAdminRequested() || isSuperAdmin(request.auth.uid));
+      allow update: if hasAuth() && 
+      		(isSuperAdmin(request.auth.uid) || pageAdminRequested());
+      allow create: if hasAuth() && request.auth.uid == resource.data.createdBy &&
+      		!exists(/databases/$(database)/documents/pagesPublic/$(pageId));
+
+    }
+
+    match /pagesPublic/{pageId}/admins/{listId} {
+      
+      function isPageApproved() {
+        return resource.data.approved == true
+      }
+
+      allow read, write: if hasAuth() && isPageApproved();
+    }
+
+    match /pagesPublic/{pageId}/followers/{listId} {
+      
+      function isPageApproved() {
+        return resource.data.approved == true
+      }
+
+      allow read, write: if hasAuth() && isPageApproved();
+    }
+
+    
+    // Channels
+    match /channels/{channelDocId} {
+      
+    	allow read: if hasAuth();
+      allow create: if hasAuth();
+
+    }
+
+    match /channels/{channelDocId}/admins/{listId} {
+
+      allow read, write: if hasAuth();
+    }
+
+    match /channels/{channelDocId}/followers/{listId} {
+      
+      allow read, write: if hasAuth();
+    }
+
+
+    // News-Posts 
+    match /newsPosts/{newsPostId} {
+      function isChannelAdmin(){
+        return resource.data.createdBy in 
+          get(/databases/$(database)/documents/channels/$(resource.data.postMetaData.channelDocId)/admins/0).data.idList;
+      }
+      allow read, write: if hasAuth();
+    }
+
+    match /newsPosts/{newsPostId}/upVoters/{listId} {
+      
+      allow read, write: if hasAuth();
+    }
+
+    match /newsPosts/{newsPostId}/downVoters/{listId} {
+      
+      allow read, write: if hasAuth();
+    }
+
+
+    // // Educations-private
+    // match /educationsPrivate/{educationId}{
+    
+    // 	function approvingEducaionPrivate(){
+    //   	return request.resource.data.keys()
+    //         		.hasOnly(["approveDetails"]) 
+    //         && request.resource.data.approveDetails.keys()
+    //         		.hasAll(["approvedBy", "approvedAt",]) 
+    //         && ispageAdmin(resource.data.institutionDomain);
+    //   }
+    
+    // 	allow read: if hasAuth() 
+    //   			&& (ispageAdmin(resource.data.institutionDomain) 
+    //         		|| resource.data.userId == request.auth.uid
+    //             || isSuperAdmin(request.auth.uid));
+            
+    //   allow create: if hasAuth() 
+    //   			&& resource == null 
+    //         && request.resource.data.userId == request.auth.uid;
+            
+    //   allow delete: if hasAuth()
+    //   			&& (ispageAdmin(resource.data.institutionDomain)
+    //         		|| isSuperAdmin(request.auth.uid));
+            
+    //   allow update: if hasAuth()
+    //   			&& approvingEducaionPrivate();
+
+    // }
+    
+    // // Educations-public
+    // match /educationsPublic/{educationId}{
+    
+    // 	function approvingEducaionPublic(){
+    //   	return request.resource.data.keys()
+    //         		.hasOnly(["institutionApproved"]) 
+    //         && request.resource.data.institutionApproved == true
+    //         && ispageAdmin(resource.data.degree.institutionDomain);
+    //   }
+      
+    // 	allow read: if hasAuth();
+      
+    //   allow create: if hasAuth() 
+    //   			&& resource == null 
+    //         && request.resource.data.userId == request.auth.uid;
+            
+    //   allow delete: if hasAuth()
+    //   			&& ispageAdmin(resource.data.degree.institutionDomain);
+            
+    //   allow update: if hasAuth()
+    //   			&& approvingEducaionPublic();
+
+    // }
+
+
+    // // WorkRoles-private
+    // match /workRolesPrivate/{docId}{
+    
+    // 	function approvingWorkRolePrivate(){
+    //   	return request.resource.data.keys()
+    //         		.hasOnly(["approveDetails"]) 
+    //         && request.resource.data.approveDetails.keys()
+    //         		.hasAll(["approvedBy", "approvedAt",]) 
+    //         && ispageAdmin(resource.data.workRole.institutionDomain);
+    //   }
+    
+    // 	allow read: if hasAuth() 
+    //   			&& (ispageAdmin(resource.data.workRole.institutionDomain) 
+    //         		|| resource.data.userId == request.auth.uid);
+            
+    //   allow create: if hasAuth() 
+    //   			&& resource == null 
+    //         && request.resource.data.userId == request.auth.uid;
+            
+    //   allow delete: if hasAuth()
+    //   			&& ispageAdmin(resource.data.workRoleinstitutionDomain);
+            
+    //   allow update: if hasAuth()
+    //   			&& approvingWorkRolePrivate();
+
+    // }
+    
+    // // WorkRoles-public
+    // match /workRolesPublic/{docId}{
+      
+    // 	function approvingWorkRolePublic(){
+      
+    //   	return request.resource.data.keys()
+    //         		.hasOnly(["institutionApproved"]) 
+    //         && request.resource.data.institutionApproved == true
+    //         && ispageAdmin(resource.data.workRole.institutionDomain);
+    //   }
+      
+    // 	allow read: if hasAuth();
+      
+    //   allow create: if hasAuth() 
+    //   			&& resource == null 
+    //         && request.resource.data.userId == request.auth.uid;
+            
+    //   allow delete: if hasAuth()
+    //   			&& ispageAdmin(resource.data.workRole.institutionDomain);
+            
+    //   allow update: if hasAuth()
+    //   			&& approvingWorkRolePublic();
+
+    // }
+    
+    // //Degrees
+    // match /degrees/{docId}{
+      
+    // 	allow read, write: if hasAuth();
+    
+    // }
+
+
+    // SuperAdmins
+    match /superAdmins/{docId}{
+      allow read, write: if hasAuth() && isSuperAdmin(request.auth.uid);
+    }
+    
+    
+    // Common functions
+
+    // function isDormitoryAdmin(dormitoryId){
+    //   return request.auth.uid in 
+    //     get(/databases/$(database)/documents/dormitoriesPrivate/$(dormitoryId)).data.adminIds;
+    // }
+
+    // function ispageAdmin(institutionDomain){
+    //   return request.auth.uid in 
+    //     get(/databases/$(database)/documents/pagesPrivate/$(institutionDomain)).data.adminIds;
+    // }
+    
+    function hasAuth(){
+    	return request.auth != null;
+    }
+    
+    function isSuperAdmin(userId){
+    	return exists(/databases/$(database)/documents/superAdmins/$(userId));
+    }
+  }
+}
